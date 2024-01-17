@@ -21,11 +21,15 @@ namespace OpenTelemetry.ResourceDetectors.Container.Tests;
 public class ContainerResourceDetectorTests : IDisposable
 {
     // Kubernetes Test Environment Variables
-    // TODO: Setup default environment variables and files
     private const string KUBESERVICEHOST = "127.0.0.1";
-    private const string KUBESERVICEPORT = "";
-    private const string HOSTNAME = "";
-    private const string CONTAINERNAME = "";
+    private const string KUBESERVICEPORT = "0";
+    private const string HOSTNAME = "demo";
+    private const string CONTAINERNAME = "test2";
+    private const string TESTNAMESPACE = "default";
+    private const string KUBEEXPECTEDCONTAINERID = "cd9db70ac37bca61b7037406c01f79b9888550ca57c66d901ce063c02aa4ac29";
+
+    // contains a "z"
+    private const string KUBEINVALIDCONTAINERID = "fb5916a02feca96bdeecd8e062df9e5e51d6617c8214b5e1f3fz9320f4402ae6";
 
     private readonly List<TestCase> testValidCasesV1 =
     [
@@ -175,23 +179,28 @@ public class ContainerResourceDetectorTests : IDisposable
     public async void TestValidKubeContainer()
     {
         this.SetKubeEnvironment();
+        var containerResourceDetector = new ContainerResourceDetector();
 
-        // TODO: Test ideal scenario
-        await using var metadataEndpoint = new MockKubeApiEndpoint(string.Empty);
+        await using var metadataEndpoint = new MockKubeApiEndpoint(KUBEEXPECTEDCONTAINERID);
+
+        Assert.Equal(
+            KUBEEXPECTEDCONTAINERID,
+            GetContainerId(containerResourceDetector.BuildResource(Path.GetTempPath(), ContainerResourceDetector.ParseMode.K8)));
     }
 
     [Fact]
     public async void TestInvalidKubeContainer()
     {
         this.SetKubeEnvironment();
-        await using (var metadataEndpoint = new MockKubeApiEndpoint(string.Empty))
+        var containerResourceDetector = new ContainerResourceDetector();
+        await using (var metadataEndpoint = new MockKubeApiEndpoint(KUBEINVALIDCONTAINERID))
         {
-            // TODO: Test invalid coantainer id instance
+            Assert.Equal(containerResourceDetector.BuildResource(Path.GetTempPath(), ContainerResourceDetector.ParseMode.K8), Resource.Empty);
         }
 
-        await using (var metadataEndpoint = new MockKubeApiEndpoint(string.Empty, false))
+        await using (var metadataEndpoint = new MockKubeApiEndpoint(KUBEEXPECTEDCONTAINERID, false))
         {
-            // TODO: Test not found
+            Assert.Equal(containerResourceDetector.BuildResource(Path.GetTempPath(), ContainerResourceDetector.ParseMode.K8), Resource.Empty);
         }
     }
 #endif
@@ -212,6 +221,10 @@ public class ContainerResourceDetectorTests : IDisposable
         this.kubeCertFile = new TempFile();
         this.kubeTokenFile = new TempFile();
         this.kubeNamespaceFile = new TempFile();
+
+        this.kubeCertFile.Write("Test Certificate");
+        this.kubeTokenFile.Write("Test Token");
+        this.kubeNamespaceFile.Write(TESTNAMESPACE);
 
         KubernetesProperties.KubeServiceAcctDirPath = string.Empty;
         KubernetesProperties.KubeApiCertFile = this.kubeCertFile.FilePath;
@@ -242,19 +255,21 @@ public class ContainerResourceDetectorTests : IDisposable
         public readonly Uri Address;
         private readonly IWebHost server;
 
-        public MockKubeApiEndpoint(string expectedContainerId, bool isFound = true)
+        public MockKubeApiEndpoint(string containerId, bool isFound = true)
         {
             // TODO: Update with default namespace name
             this.server = new WebHostBuilder()
                 .UseKestrel()
-                .UseUrls($"https://{KUBESERVICEHOST}:{KUBESERVICEPORT}/api/v1/namespaces/default/pods/{HOSTNAME}") // Use random localhost port
+                .UseUrls($"https://{KUBESERVICEHOST}:{KUBESERVICEPORT}") // Use random localhost port
                 .Configure(app =>
                 {
                     app.Run(async context =>
                     {
-                        if (context.Request.Method == HttpMethods.Get && context.Request.Path == "/" && isFound)
+                        if (context.Request.Method == HttpMethods.Get && context.Request.Path == $"/api/v1/namespaces/{TESTNAMESPACE}/pods/{HOSTNAME}" && isFound)
                         {
-                            var data = Encoding.UTF8.GetBytes(string.Empty);
+                            var content = await File.ReadAllTextAsync("SampleKubeApiResponses/SampleResponseTemplate.json");
+                            content = content.Replace("#expectedContainerId#", containerId);
+                            var data = Encoding.UTF8.GetBytes(content);
                             context.Response.ContentType = "application/json";
                             await context.Response.Body.WriteAsync(data);
                         }

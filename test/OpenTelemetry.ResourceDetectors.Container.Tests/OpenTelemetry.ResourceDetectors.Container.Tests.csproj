@@ -18,6 +18,9 @@
 
   <ItemGroup Condition="'$(TargetFramework)' != '$(NetFrameworkMinimumSupportedVersion)'">
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <None Update="SampleKubeApiResponses\SampleResponseTemplate.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
   </ItemGroup>
 
 </Project>

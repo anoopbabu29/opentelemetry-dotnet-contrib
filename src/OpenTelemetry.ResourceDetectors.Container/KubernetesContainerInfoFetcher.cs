@@ -26,7 +26,7 @@ internal class KubernetesContainerInfoFetcher
     {
         // executing request only once. Do we need to retry again if data not available?
         string response = this.ExecuteApiRequest();
-        if (response == null)
+        if (string.IsNullOrEmpty(response))
         {
             return string.Empty;
         }
