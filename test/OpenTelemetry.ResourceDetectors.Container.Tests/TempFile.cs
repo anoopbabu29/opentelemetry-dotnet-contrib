@@ -18,13 +18,9 @@ internal class TempFile : IDisposable
 
     public void Write(string data)
     {
-        using (var stream = new FileStream(this.FilePath, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.ReadWrite | FileShare.Delete))
-        {
-            using (var sw = new StreamWriter(stream))
-            {
-                sw.Write(data);
-            }
-        }
+        using var stream = new FileStream(this.FilePath, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.ReadWrite | FileShare.Delete);
+        using var sw = new StreamWriter(stream);
+        sw.Write(data);
     }
 
     public void Dispose()

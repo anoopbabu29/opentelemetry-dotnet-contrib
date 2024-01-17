@@ -137,7 +137,7 @@ public class ContainerResourceDetector : IResourceDetector
         if (containerInfoFetcher != null)
         {
             string kubeContainerId = containerInfoFetcher.ExtractContainerId();
-            if (!string.IsNullOrEmpty(kubeContainerId))
+            if (!string.IsNullOrEmpty(kubeContainerId) || !EncodingUtils.IsValidHexString(kubeContainerId))
             {
                 return kubeContainerId;
             }

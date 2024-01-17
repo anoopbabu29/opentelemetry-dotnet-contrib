@@ -1,18 +1,34 @@
 // Copyright The OpenTelemetry Authors
 // SPDX-License-Identifier: Apache-2.0
 
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+#if !NETFRAMEWORK
+using System.Text;
+using System.Threading.Tasks;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Hosting.Server.Features;
+using Microsoft.AspNetCore.Http;
+#endif
 using OpenTelemetry.Resources;
 using Xunit;
 
 namespace OpenTelemetry.ResourceDetectors.Container.Tests;
 
-public class ContainerResourceDetectorTests
+public class ContainerResourceDetectorTests : IDisposable
 {
-    private readonly List<TestCase> testValidCasesV1 = new()
-    {
+    // Kubernetes Test Environment Variables
+    // TODO: Setup default environment variables and files
+    private const string KUBESERVICEHOST = "127.0.0.1";
+    private const string KUBESERVICEPORT = "";
+    private const string HOSTNAME = "";
+    private const string CONTAINERNAME = "";
+
+    private readonly List<TestCase> testValidCasesV1 =
+    [
         new(
             name: "cgroupv1 with prefix",
             line: "13:name=systemd:/podruntime/docker/kubepods/crio-e2cc29debdf85dde404998aa128997a819ff",
@@ -33,10 +49,10 @@ public class ContainerResourceDetectorTests
             line: "13:name=systemd:/pod/d86d75589bf6cc254f3e2cc29debdf85dde404998aa128997a819ff991827356",
             expectedContainerId: "d86d75589bf6cc254f3e2cc29debdf85dde404998aa128997a819ff991827356",
             cgroupVersion: ContainerResourceDetector.ParseMode.V1),
-    };
+    ];
 
-    private readonly List<TestCase> testValidCasesV2 = new()
-    {
+    private readonly List<TestCase> testValidCasesV2 =
+    [
         new(
             name: "cgroupv2 with container Id",
             line: "13:name=systemd:/pod/d86d75589bf6cc254f3e2cc29debdf85dde404998aa128997a819ff991827356/hostname",
@@ -67,10 +83,10 @@ public class ContainerResourceDetectorTests
             line: "1096 1088 0:104 /containers/overlay-containers/1a2de27e7157106568f7e081e42a8c14858c02bd9df30d6e352b298178b46809/userdata/hostname /etc/hostname rw,nosuid,nodev,relatime - tmpfs tmpfs rw,size=813800k,nr_inodes=203450,mode=700,uid=1000,gid=1000",
             expectedContainerId: "1a2de27e7157106568f7e081e42a8c14858c02bd9df30d6e352b298178b46809",
             cgroupVersion: ContainerResourceDetector.ParseMode.V2),
-    };
+    ];
 
-    private readonly List<TestCase> testInvalidCases = new()
-    {
+    private readonly List<TestCase> testInvalidCases =
+    [
         new(
             name: "Invalid cgroupv1 line",
             line: "13:name=systemd:/podruntime/docker/kubepods/ac679f8a8319c8cf7d38e1adf263bc08d23zzzz",
@@ -79,7 +95,26 @@ public class ContainerResourceDetectorTests
             name: "Invalid hex cgroupv2 line (contains a z)",
             line: "13:name=systemd:/var/lib/containerd/io.containerd.grpc.v1.cri/sandboxes/fb5916a02feca96bdeecd8e062df9e5e51d6617c8214b5e1f3fz9320f4402ae6/hostname",
             cgroupVersion: ContainerResourceDetector.ParseMode.V2),
-    };
+    ];
+
+    private readonly string originalKubeServiceAcctDirPath = KubernetesProperties.KubeServiceAcctDirPath;
+    private readonly string originalKubeApiCertFile = KubernetesProperties.KubeApiCertFile;
+    private readonly string originalKubeApiTokenFile = KubernetesProperties.KubeApiTokenFile;
+    private readonly string originalKubeApiNamespaceFile = KubernetesProperties.KubeApiNamespaceFile;
+
+    private TempFile? kubeNamespaceFile;
+    private TempFile? kubeTokenFile;
+    private TempFile? kubeCertFile;
+
+    public ContainerResourceDetectorTests()
+    {
+        this.ResetEnvironment();
+    }
+
+    public void Dispose()
+    {
+        this.ResetEnvironment();
+    }
 
     [Fact]
     public void TestValidContainer()
@@ -135,28 +170,126 @@ public class ContainerResourceDetectorTests
         Assert.Equal(containerResourceDetector.BuildResource(Path.GetTempPath(), ContainerResourceDetector.ParseMode.V2), Resource.Empty);
     }
 
+#if !NETFRAMEWORK
+    [Fact]
+    public async void TestValidKubeContainer()
+    {
+        this.SetKubeEnvironment();
+
+        // TODO: Test ideal scenario
+        await using var metadataEndpoint = new MockKubeApiEndpoint(string.Empty);
+    }
+
+    [Fact]
+    public async void TestInvalidKubeContainer()
+    {
+        this.SetKubeEnvironment();
+        await using (var metadataEndpoint = new MockKubeApiEndpoint(string.Empty))
+        {
+            // TODO: Test invalid coantainer id instance
+        }
+
+        await using (var metadataEndpoint = new MockKubeApiEndpoint(string.Empty, false))
+        {
+            // TODO: Test not found
+        }
+    }
+#endif
+
     private static string GetContainerId(Resource resource)
     {
         var resourceAttributes = resource.Attributes.ToDictionary(x => x.Key, x => x.Value);
         return resourceAttributes[ContainerSemanticConventions.AttributeContainerId].ToString()!;
     }
 
-    private sealed class TestCase
+    private void SetKubeEnvironment()
     {
-        public TestCase(string name, string line, ContainerResourceDetector.ParseMode cgroupVersion, string? expectedContainerId = null)
+        Environment.SetEnvironmentVariable(KubernetesProperties.KubernetesServiceHostEnvVar, KUBESERVICEHOST);
+        Environment.SetEnvironmentVariable(KubernetesProperties.KubernetesServicePortEnvVar, KUBESERVICEPORT);
+        Environment.SetEnvironmentVariable(KubernetesProperties.HostnameEnvVar, HOSTNAME);
+        Environment.SetEnvironmentVariable(KubernetesProperties.ContainerNameEnvVar, CONTAINERNAME);
+
+        this.kubeCertFile = new TempFile();
+        this.kubeTokenFile = new TempFile();
+        this.kubeNamespaceFile = new TempFile();
+
+        KubernetesProperties.KubeServiceAcctDirPath = string.Empty;
+        KubernetesProperties.KubeApiCertFile = this.kubeCertFile.FilePath;
+        KubernetesProperties.KubeApiTokenFile = this.kubeTokenFile.FilePath;
+        KubernetesProperties.KubeApiNamespaceFile = this.kubeNamespaceFile.FilePath;
+    }
+
+    private void ResetEnvironment()
+    {
+        Environment.SetEnvironmentVariable(KubernetesProperties.KubernetesServiceHostEnvVar, null);
+        Environment.SetEnvironmentVariable(KubernetesProperties.KubernetesServicePortEnvVar, null);
+        Environment.SetEnvironmentVariable(KubernetesProperties.HostnameEnvVar, null);
+        Environment.SetEnvironmentVariable(KubernetesProperties.ContainerNameEnvVar, null);
+
+        this.kubeNamespaceFile?.Dispose();
+        this.kubeTokenFile?.Dispose();
+        this.kubeCertFile?.Dispose();
+
+        KubernetesProperties.KubeServiceAcctDirPath = this.originalKubeServiceAcctDirPath;
+        KubernetesProperties.KubeApiCertFile = this.originalKubeApiCertFile;
+        KubernetesProperties.KubeApiTokenFile = this.originalKubeApiTokenFile;
+        KubernetesProperties.KubeApiNamespaceFile = this.originalKubeApiNamespaceFile;
+    }
+
+#if !NETFRAMEWORK
+    private class MockKubeApiEndpoint : IAsyncDisposable
+    {
+        public readonly Uri Address;
+        private readonly IWebHost server;
+
+        public MockKubeApiEndpoint(string expectedContainerId, bool isFound = true)
         {
-            this.Name = name;
-            this.Line = line;
-            this.ExpectedContainerId = expectedContainerId;
-            this.CgroupVersion = cgroupVersion;
+            // TODO: Update with default namespace name
+            this.server = new WebHostBuilder()
+                .UseKestrel()
+                .UseUrls($"https://{KUBESERVICEHOST}:{KUBESERVICEPORT}/api/v1/namespaces/default/pods/{HOSTNAME}") // Use random localhost port
+                .Configure(app =>
+                {
+                    app.Run(async context =>
+                    {
+                        if (context.Request.Method == HttpMethods.Get && context.Request.Path == "/" && isFound)
+                        {
+                            var data = Encoding.UTF8.GetBytes(string.Empty);
+                            context.Response.ContentType = "application/json";
+                            await context.Response.Body.WriteAsync(data);
+                        }
+                        else
+                        {
+                            context.Response.StatusCode = StatusCodes.Status404NotFound;
+                            await context.Response.WriteAsync("Not found");
+                        }
+                    });
+                }).Build();
+            this.server.Start();
+
+            this.Address = new Uri(this.server.ServerFeatures.Get<IServerAddressesFeature>()!.Addresses.First());
         }
 
-        public string Name { get; }
+        public async ValueTask DisposeAsync()
+        {
+            await this.DisposeAsyncCore();
+        }
 
-        public string Line { get; }
+        protected virtual async ValueTask DisposeAsyncCore()
+        {
+            await this.server.StopAsync();
+        }
+    }
+#endif
 
-        public string? ExpectedContainerId { get; }
+    private sealed class TestCase(string name, string line, ContainerResourceDetector.ParseMode cgroupVersion, string? expectedContainerId = null)
+    {
+        public string Name { get; } = name;
 
-        public ContainerResourceDetector.ParseMode CgroupVersion { get; }
+        public string Line { get; } = line;
+
+        public string? ExpectedContainerId { get; } = expectedContainerId;
+
+        public ContainerResourceDetector.ParseMode CgroupVersion { get; } = cgroupVersion;
     }
 }

@@ -46,7 +46,7 @@ internal class KubernetesContainerInfoFetcher
         return null;
     }
 
-    protected static bool CheckAndInitProp(string envPropName1, string? envPropName2, out string? result, bool canContinue = false)
+    protected static bool CheckAndInitProp(string envPropName1, string? envPropName2, out string? result)
     {
         string? value = Environment.GetEnvironmentVariable(envPropName1);
 
@@ -177,7 +177,7 @@ internal class KubernetesContainerInfoFetcher
 
                 // namespace can be extracted as env or from k8 secret file. More preference to env var. (need to change?)
                 // check for namespace (env var or file), token file, ca.crt file
-                && (CheckAndInitProp(KubernetesProperties.PodNamespaceEnvVar, null, out p.Namespace, true) ||
+                && (CheckAndInitProp(KubernetesProperties.PodNamespaceEnvVar, null, out p.Namespace) ||
                     CheckFileAndInitProp(
                         KubernetesProperties.KubeServiceAcctDirPath,
                         KubernetesProperties.KubeApiNamespaceFile,
@@ -210,7 +210,12 @@ internal class KubernetesContainerInfoFetcher
 
     private string ExecuteApiRequest()
     {
-        return this.apiConnector!.ExecuteRequest();
+        if (this.apiConnector != null)
+        {
+            return this.apiConnector.ExecuteRequest();
+        }
+
+        return string.Empty;
     }
 
     private class Properties
