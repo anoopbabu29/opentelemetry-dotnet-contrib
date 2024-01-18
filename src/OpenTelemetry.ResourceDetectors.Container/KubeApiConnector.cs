@@ -63,14 +63,15 @@ internal class KubeApiConnector
         try
         {
             httpClient.Timeout = TimeSpan.FromSeconds(this.connectionTimeout);
-            using HttpResponseMessage response = await httpClient.GetAsync(uri).ConfigureAwait(false);
+            using HttpResponseMessage response = httpClient.GetAsync(uri).ConfigureAwait(false).;
             response.EnsureSuccessStatusCode();
             string responseBody = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
 
             return responseBody;
         }
-        catch (HttpRequestException)
+        catch (HttpRequestException e)
         {
+            Console.WriteLine(e.Message);
             return string.Empty;
         }
     }

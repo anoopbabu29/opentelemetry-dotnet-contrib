@@ -15,6 +15,7 @@ namespace OpenTelemetry.ResourceDetectors.Container;
 /// </summary>
 public class ContainerResourceDetector : IResourceDetector
 {
+    internal KubernetesProperties KubernetesProps = new();
     private const string Filepath = "/proc/self/cgroup";
     private const string FilepathV2 = "/proc/self/mountinfo";
     private const string Hostname = "hostname";
@@ -130,10 +131,22 @@ public class ContainerResourceDetector : IResourceDetector
         return containerId;
     }
 
-    private static string? ExtractContainerIdK8()
+    private static string RemovePrefixAndSuffixIfNeeded(string input, int startIndex, int endIndex)
+    {
+        startIndex = (startIndex == -1) ? 0 : startIndex + 1;
+
+        if (endIndex == -1)
+        {
+            endIndex = input.Length;
+        }
+
+        return input.Substring(startIndex, endIndex - startIndex);
+    }
+
+    private string? ExtractContainerIdK8()
     {
 #if !NETFRAMEWORK
-        KubernetesContainerInfoFetcher? containerInfoFetcher = KubernetesContainerInfoFetcher.GetInstance();
+        KubernetesContainerInfoFetcher? containerInfoFetcher = KubernetesContainerInfoFetcher.GetInstance(this.KubernetesProps);
         if (containerInfoFetcher != null)
         {
             string kubeContainerId = containerInfoFetcher.ExtractContainerId();
@@ -145,18 +158,6 @@ public class ContainerResourceDetector : IResourceDetector
 #endif
 
         return null;
-    }
-
-    private static string RemovePrefixAndSuffixIfNeeded(string input, int startIndex, int endIndex)
-    {
-        startIndex = (startIndex == -1) ? 0 : startIndex + 1;
-
-        if (endIndex == -1)
-        {
-            endIndex = input.Length;
-        }
-
-        return input.Substring(startIndex, endIndex - startIndex);
     }
 
     /// <summary>
@@ -171,7 +172,7 @@ public class ContainerResourceDetector : IResourceDetector
         {
             if (parseType == ParseMode.K8)
             {
-                return ExtractContainerIdK8();
+                return this.ExtractContainerIdK8();
             }
             else
             {

@@ -30,6 +30,7 @@ public class ContainerResourceDetectorTests : IDisposable
 
     // contains a "z"
     private const string KUBEINVALIDCONTAINERID = "fb5916a02feca96bdeecd8e062df9e5e51d6617c8214b5e1f3fz9320f4402ae6";
+    private readonly KubernetesProperties kubernetesProperties = new();
 
     private readonly List<TestCase> testValidCasesV1 =
     [
@@ -100,11 +101,6 @@ public class ContainerResourceDetectorTests : IDisposable
             line: "13:name=systemd:/var/lib/containerd/io.containerd.grpc.v1.cri/sandboxes/fb5916a02feca96bdeecd8e062df9e5e51d6617c8214b5e1f3fz9320f4402ae6/hostname",
             cgroupVersion: ContainerResourceDetector.ParseMode.V2),
     ];
-
-    private readonly string originalKubeServiceAcctDirPath = KubernetesProperties.KubeServiceAcctDirPath;
-    private readonly string originalKubeApiCertFile = KubernetesProperties.KubeApiCertFile;
-    private readonly string originalKubeApiTokenFile = KubernetesProperties.KubeApiTokenFile;
-    private readonly string originalKubeApiNamespaceFile = KubernetesProperties.KubeApiNamespaceFile;
 
     private TempFile? kubeNamespaceFile;
     private TempFile? kubeTokenFile;
@@ -179,7 +175,10 @@ public class ContainerResourceDetectorTests : IDisposable
     public async void TestValidKubeContainer()
     {
         this.SetKubeEnvironment();
-        var containerResourceDetector = new ContainerResourceDetector();
+        var containerResourceDetector = new ContainerResourceDetector
+        {
+            KubernetesProps = this.kubernetesProperties,
+        };
 
         await using var metadataEndpoint = new MockKubeApiEndpoint(KUBEEXPECTEDCONTAINERID);
 
@@ -192,7 +191,11 @@ public class ContainerResourceDetectorTests : IDisposable
     public async void TestInvalidKubeContainer()
     {
         this.SetKubeEnvironment();
-        var containerResourceDetector = new ContainerResourceDetector();
+        var containerResourceDetector = new ContainerResourceDetector()
+        {
+            KubernetesProps = this.kubernetesProperties,
+        };
+
         await using (var metadataEndpoint = new MockKubeApiEndpoint(KUBEINVALIDCONTAINERID))
         {
             Assert.Equal(containerResourceDetector.BuildResource(Path.GetTempPath(), ContainerResourceDetector.ParseMode.K8), Resource.Empty);
@@ -213,10 +216,10 @@ public class ContainerResourceDetectorTests : IDisposable
 
     private void SetKubeEnvironment()
     {
-        Environment.SetEnvironmentVariable(KubernetesProperties.KubernetesServiceHostEnvVar, KUBESERVICEHOST);
-        Environment.SetEnvironmentVariable(KubernetesProperties.KubernetesServicePortEnvVar, KUBESERVICEPORT);
-        Environment.SetEnvironmentVariable(KubernetesProperties.HostnameEnvVar, HOSTNAME);
-        Environment.SetEnvironmentVariable(KubernetesProperties.ContainerNameEnvVar, CONTAINERNAME);
+        Environment.SetEnvironmentVariable(this.kubernetesProperties.KubernetesServiceHostEnvVar, KUBESERVICEHOST);
+        Environment.SetEnvironmentVariable(this.kubernetesProperties.KubernetesServicePortEnvVar, KUBESERVICEPORT);
+        Environment.SetEnvironmentVariable(this.kubernetesProperties.HostnameEnvVar, HOSTNAME);
+        Environment.SetEnvironmentVariable(this.kubernetesProperties.ContainerNameEnvVar, CONTAINERNAME);
 
         this.kubeCertFile = new TempFile();
         this.kubeTokenFile = new TempFile();
@@ -226,27 +229,22 @@ public class ContainerResourceDetectorTests : IDisposable
         this.kubeTokenFile.Write("Test Token");
         this.kubeNamespaceFile.Write(TESTNAMESPACE);
 
-        KubernetesProperties.KubeServiceAcctDirPath = string.Empty;
-        KubernetesProperties.KubeApiCertFile = this.kubeCertFile.FilePath;
-        KubernetesProperties.KubeApiTokenFile = this.kubeTokenFile.FilePath;
-        KubernetesProperties.KubeApiNamespaceFile = this.kubeNamespaceFile.FilePath;
+        this.kubernetesProperties.KubeServiceAcctDirPath = string.Empty;
+        this.kubernetesProperties.KubeApiCertFile = this.kubeCertFile.FilePath;
+        this.kubernetesProperties.KubeApiTokenFile = this.kubeTokenFile.FilePath;
+        this.kubernetesProperties.KubeApiNamespaceFile = this.kubeNamespaceFile.FilePath;
     }
 
     private void ResetEnvironment()
     {
-        Environment.SetEnvironmentVariable(KubernetesProperties.KubernetesServiceHostEnvVar, null);
-        Environment.SetEnvironmentVariable(KubernetesProperties.KubernetesServicePortEnvVar, null);
-        Environment.SetEnvironmentVariable(KubernetesProperties.HostnameEnvVar, null);
-        Environment.SetEnvironmentVariable(KubernetesProperties.ContainerNameEnvVar, null);
+        Environment.SetEnvironmentVariable(this.kubernetesProperties.KubernetesServiceHostEnvVar, null);
+        Environment.SetEnvironmentVariable(this.kubernetesProperties.KubernetesServicePortEnvVar, null);
+        Environment.SetEnvironmentVariable(this.kubernetesProperties.HostnameEnvVar, null);
+        Environment.SetEnvironmentVariable(this.kubernetesProperties.ContainerNameEnvVar, null);
 
         this.kubeNamespaceFile?.Dispose();
         this.kubeTokenFile?.Dispose();
         this.kubeCertFile?.Dispose();
-
-        KubernetesProperties.KubeServiceAcctDirPath = this.originalKubeServiceAcctDirPath;
-        KubernetesProperties.KubeApiCertFile = this.originalKubeApiCertFile;
-        KubernetesProperties.KubeApiTokenFile = this.originalKubeApiTokenFile;
-        KubernetesProperties.KubeApiNamespaceFile = this.originalKubeApiNamespaceFile;
     }
 
 #if !NETFRAMEWORK

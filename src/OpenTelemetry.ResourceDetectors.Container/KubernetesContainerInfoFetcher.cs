@@ -5,6 +5,7 @@ using System;
 using System.IO;
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using OpenTelemetry.ResourceDetectors.Container.Models;
 
 namespace OpenTelemetry.ResourceDetectors.Container;
 
@@ -34,9 +35,9 @@ internal class KubernetesContainerInfoFetcher
         return this.ParseResponse(response);
     }
 
-    internal static KubernetesContainerInfoFetcher? GetInstance()
+    internal static KubernetesContainerInfoFetcher? GetInstance(KubernetesProperties kubernetesProperties)
     {
-        bool isRequirementsPresent = CheckAndInitRequirements(out var apiConnector, out var containerName);
+        bool isRequirementsPresent = CheckAndInitRequirements(kubernetesProperties, out var apiConnector, out var containerName);
 
         if (isRequirementsPresent && containerName != null)
         {
@@ -125,13 +126,13 @@ internal class KubernetesContainerInfoFetcher
     protected string ParseResponse(string response)
     {
         // Following https://kubernetes.io/docs/reference/kubernetes-api/workload-resources/pod-v1/#PodStatus
-        var obj = JsonSerializer.Deserialize<KubernetesProperties.Pod>(response);
+        var obj = JsonSerializer.Deserialize<KubePod>(response);
         if (obj == null || obj.Status == null || obj.Status.ContainerStatuses == null)
         {
             return string.Empty;
         }
 
-        foreach (KubernetesProperties.ContainerStatus containerStatus in obj.Status.ContainerStatuses)
+        foreach (ContainerStatus containerStatus in obj.Status.ContainerStatuses)
         {
             if (containerStatus.Name == this.containerName)
             {
@@ -155,7 +156,7 @@ internal class KubernetesContainerInfoFetcher
         return fileInfo.Exists && (fileInfo.Length != 0);
     }
 
-    private static bool CheckAndInitRequirements(out KubeApiConnector? apiConnector, out string? containerName)
+    private static bool CheckAndInitRequirements(KubernetesProperties kubernetesProperties, out KubeApiConnector? apiConnector, out string? containerName)
     {
         apiConnector = null;
         containerName = null;
@@ -167,30 +168,30 @@ internal class KubernetesContainerInfoFetcher
             bool requirementsPresent =
 
                 // First check for kube-api-host, kube-api-port, hostname, container-name
-                CheckAndInitProp(KubernetesProperties.KubernetesServiceHostEnvVar, null, out p.KubernetesHost)
-                && CheckAndInitProp(KubernetesProperties.KubernetesServicePortEnvVar, null, out p.KubernetesPort)
-                && CheckAndInitProp(KubernetesProperties.HostnameEnvVar, null, out p.HostName)
+                CheckAndInitProp(kubernetesProperties.KubernetesServiceHostEnvVar, null, out p.KubernetesHost)
+                && CheckAndInitProp(kubernetesProperties.KubernetesServicePortEnvVar, null, out p.KubernetesPort)
+                && CheckAndInitProp(kubernetesProperties.HostnameEnvVar, null, out p.HostName)
                 && CheckAndInitProp(
-                    KubernetesProperties.ContainerNameEnvVar,
-                    KubernetesProperties.ContainerNameEnvVar2,
+                    kubernetesProperties.ContainerNameEnvVar,
+                    kubernetesProperties.ContainerNameEnvVar2,
                     out p.ContainerName)
 
                 // namespace can be extracted as env or from k8 secret file. More preference to env var. (need to change?)
                 // check for namespace (env var or file), token file, ca.crt file
-                && (CheckAndInitProp(KubernetesProperties.PodNamespaceEnvVar, null, out p.Namespace) ||
+                && (CheckAndInitProp(kubernetesProperties.PodNamespaceEnvVar, null, out p.Namespace) ||
                     CheckFileAndInitProp(
-                        KubernetesProperties.KubeServiceAcctDirPath,
-                        KubernetesProperties.KubeApiNamespaceFile,
+                        kubernetesProperties.KubeServiceAcctDirPath,
+                        kubernetesProperties.KubeApiNamespaceFile,
                         false,
                         out p.Namespace))
                 && CheckFileAndInitProp(
-                    KubernetesProperties.KubeServiceAcctDirPath,
-                    KubernetesProperties.KubeApiTokenFile,
+                    kubernetesProperties.KubeServiceAcctDirPath,
+                    kubernetesProperties.KubeApiTokenFile,
                     false,
                     out p.Token)
                 && CheckFileAndInitProp(
-                    KubernetesProperties.KubeServiceAcctDirPath,
-                    KubernetesProperties.KubeApiCertFile,
+                    kubernetesProperties.KubeServiceAcctDirPath,
+                    kubernetesProperties.KubeApiCertFile,
                     true,
                     out p.CertificatePath);
 

@@ -1,48 +1,33 @@
 // Copyright The OpenTelemetry Authors
 // SPDX-License-Identifier: Apache-2.0
-
-using System.Collections.Generic;
-using System.Text.Json.Serialization;
-
 namespace OpenTelemetry.ResourceDetectors.Container;
 
-internal static class KubernetesProperties
+internal class KubernetesProperties(
+    string kubernetesPortEnvVar = "KUBERNETES_PORT",
+    string kubernetesServiceHostEnvVar = "KUBERNETES_SERVICE_HOST",
+    string kubernetesServicePortEnvVar = "KUBERNETES_SERVICE_PORT",
+    string hostnameEnvVar = "HOSTNAME",
+    string containerNameEnvVar = "CONTAINER_NAME",
+    string containerNameEnvVar2 = "container.name",
+    string kodNamespaceEnvVar = "NAMESPACE",
+    string kubeServiceAcctDirPath = "/var/run/secrets/kubernetes.io/serviceaccount",
+    string kubeApiCertFile = "ca.crt",
+    string kubeApiTokenFile = "token",
+    string kubeApiNamespaceFile = "namespace")
 {
-    public static string KubernetesPortEnvVar = "KUBERNETES_PORT";
-    public static string KubernetesServiceHostEnvVar = "KUBERNETES_SERVICE_HOST";
-    public static string KubernetesServicePortEnvVar = "KUBERNETES_SERVICE_PORT";
+    public string KubernetesPortEnvVar = kubernetesPortEnvVar;
+    public string KubernetesServiceHostEnvVar = kubernetesServiceHostEnvVar;
+    public string KubernetesServicePortEnvVar = kubernetesServicePortEnvVar;
 
-    public static string HostnameEnvVar = "HOSTNAME";
+    public string HostnameEnvVar = hostnameEnvVar;
 
-    public static string ContainerNameEnvVar = "CONTAINER_NAME";
-    public static string ContainerNameEnvVar2 = "container.name";
+    public string ContainerNameEnvVar = containerNameEnvVar;
+    public string ContainerNameEnvVar2 = containerNameEnvVar2;
 
-    public static string PodNamespaceEnvVar = "NAMESPACE";
+    public string PodNamespaceEnvVar = kodNamespaceEnvVar;
 
-    public static string KubeServiceAcctDirPath = "/var/run/secrets/kubernetes.io/serviceaccount";
-    public static string KubeApiCertFile = "ca.crt";
-    public static string KubeApiTokenFile = "token";
-    public static string KubeApiNamespaceFile = "namespace";
-
-    // Classes exist for Newtonsoft Deserializing
-    public class Pod
-    {
-        [JsonPropertyName("status")]
-        public PodStatus? Status { get; set; }
-    }
-
-    public class PodStatus
-    {
-        [JsonPropertyName("containerStatuses")]
-        public List<ContainerStatus>? ContainerStatuses { get; set; }
-    }
-
-    public class ContainerStatus
-    {
-        [JsonPropertyName("name")]
-        public string? Name { get; set; }
-
-        [JsonPropertyName("containerID")]
-        public string? ContainerID { get; set; }
-    }
+    public string KubeServiceAcctDirPath = kubeServiceAcctDirPath;
+    public string KubeApiCertFile = kubeApiCertFile;
+    public string KubeApiTokenFile = kubeApiTokenFile;
+    public string KubeApiNamespaceFile = kubeApiNamespaceFile;
 }
