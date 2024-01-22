@@ -47,7 +47,7 @@ internal class KubernetesContainerInfoFetcher
         return null;
     }
 
-    protected static bool CheckAndInitProp(string envPropName1, string? envPropName2, out string? result)
+    protected static bool CheckAndInitProp(string envPropName1, string? envPropName2, out string result)
     {
         string? value = Environment.GetEnvironmentVariable(envPropName1);
 
@@ -58,7 +58,7 @@ internal class KubernetesContainerInfoFetcher
 
         if (value == null || string.IsNullOrEmpty(value))
         {
-            result = null;
+            result = string.Empty;
 
             return false;
         }

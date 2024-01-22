@@ -22,7 +22,6 @@ public class ContainerResourceDetectorTests : IDisposable
 {
     // Kubernetes Test Environment Variables
     private const string KUBESERVICEHOST = "127.0.0.1";
-    private const string KUBESERVICEPORT = "0";
     private const string HOSTNAME = "demo";
     private const string CONTAINERNAME = "test2";
     private const string TESTNAMESPACE = "default";
@@ -181,6 +180,7 @@ public class ContainerResourceDetectorTests : IDisposable
         };
 
         await using var metadataEndpoint = new MockKubeApiEndpoint(KUBEEXPECTEDCONTAINERID);
+        Environment.SetEnvironmentVariable(this.kubernetesProperties.KubernetesServicePortEnvVar, metadataEndpoint.Address.ToString());
 
         Assert.Equal(
             KUBEEXPECTEDCONTAINERID,
@@ -198,11 +198,13 @@ public class ContainerResourceDetectorTests : IDisposable
 
         await using (var metadataEndpoint = new MockKubeApiEndpoint(KUBEINVALIDCONTAINERID))
         {
+            Environment.SetEnvironmentVariable(this.kubernetesProperties.KubernetesServicePortEnvVar, metadataEndpoint.Address.ToString());
             Assert.Equal(containerResourceDetector.BuildResource(Path.GetTempPath(), ContainerResourceDetector.ParseMode.K8), Resource.Empty);
         }
 
         await using (var metadataEndpoint = new MockKubeApiEndpoint(KUBEEXPECTEDCONTAINERID, false))
         {
+            Environment.SetEnvironmentVariable(this.kubernetesProperties.KubernetesServicePortEnvVar, metadataEndpoint.Address.ToString());
             Assert.Equal(containerResourceDetector.BuildResource(Path.GetTempPath(), ContainerResourceDetector.ParseMode.K8), Resource.Empty);
         }
     }
@@ -217,7 +219,6 @@ public class ContainerResourceDetectorTests : IDisposable
     private void SetKubeEnvironment()
     {
         Environment.SetEnvironmentVariable(this.kubernetesProperties.KubernetesServiceHostEnvVar, KUBESERVICEHOST);
-        Environment.SetEnvironmentVariable(this.kubernetesProperties.KubernetesServicePortEnvVar, KUBESERVICEPORT);
         Environment.SetEnvironmentVariable(this.kubernetesProperties.HostnameEnvVar, HOSTNAME);
         Environment.SetEnvironmentVariable(this.kubernetesProperties.ContainerNameEnvVar, CONTAINERNAME);
 
@@ -247,7 +248,6 @@ public class ContainerResourceDetectorTests : IDisposable
         this.kubeCertFile?.Dispose();
     }
 
-#if !NETFRAMEWORK
     private class MockKubeApiEndpoint : IAsyncDisposable
     {
         public readonly Uri Address;
@@ -255,15 +255,14 @@ public class ContainerResourceDetectorTests : IDisposable
 
         public MockKubeApiEndpoint(string containerId, bool isFound = true)
         {
-            // TODO: Update with default namespace name
             this.server = new WebHostBuilder()
                 .UseKestrel()
-                .UseUrls($"https://{KUBESERVICEHOST}:{KUBESERVICEPORT}") // Use random localhost port
+                .UseUrls($"https://{KUBESERVICEHOST}:0") // Use random localhost port
                 .Configure(app =>
                 {
                     app.Run(async context =>
                     {
-                        if (context.Request.Method == HttpMethods.Get && context.Request.Path == $"/api/v1/namespaces/{TESTNAMESPACE}/pods/{HOSTNAME}" && isFound)
+                        if (context.Request.Method == HttpMethods.Get && isFound)
                         {
                             var content = await File.ReadAllTextAsync("SampleKubeApiResponses/SampleResponseTemplate.json");
                             content = content.Replace("#expectedContainerId#", containerId);
@@ -293,7 +292,6 @@ public class ContainerResourceDetectorTests : IDisposable
             await this.server.StopAsync();
         }
     }
-#endif
 
     private sealed class TestCase(string name, string line, ContainerResourceDetector.ParseMode cgroupVersion, string? expectedContainerId = null)
     {
