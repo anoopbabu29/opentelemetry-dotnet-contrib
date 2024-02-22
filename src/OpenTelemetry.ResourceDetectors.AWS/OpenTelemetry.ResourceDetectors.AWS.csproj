@@ -2,6 +2,7 @@
 
   <PropertyGroup>
     <!-- OmniSharp/VS Code requires TargetFrameworks to be in descending order for IntelliSense and analysis. -->
+    <NoWarn>$(NoWarn),SA1310</NoWarn>
     <TargetFrameworks>net6.0</TargetFrameworks>
     <TargetFrameworks Condition="$(OS) == 'Windows_NT'">$(TargetFrameworks);$(NetFrameworkMinimumSupportedVersion)</TargetFrameworks>
     <Description>OpenTelemetry Extensions - AWS Resource Detectors for ElasticBeanstalk, EC2, ECS, EKS.</Description>

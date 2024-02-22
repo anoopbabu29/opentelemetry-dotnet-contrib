@@ -19,7 +19,7 @@ internal class ServerCertificateValidationHandler
 
             if (serverCertificateValidationProvider == null)
             {
-                log?.FailedToValidateCertificate(nameof(ServerCertificateValidationHandler), "Failed to Load the certificate file into trusted collection");
+                log?.FailedToValidateCertificate("Failed to Load the certificate file into trusted collection");
                 return null;
             }
 
